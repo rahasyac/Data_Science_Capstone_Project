@@ -1,0 +1,223 @@
+---
+title: "Capstone Project: Video Games Sales with Ratings"
+author: "Rahasya Chandan"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+The goal of this report is to apply machine learning and data science techniques on a public dataset to study and solve any problem of our choice. The dataset used in this report is “ Video Game Sales with Rating ''. The dataset contains data of several video games with scores from critics, user scores, sales, ratings and other fields. This dataset has more than 6900 video games rating done by both critics and users. This project is trying to answer if we can predict ratings based on any of the variables in the dataset. An algorithm is written to analyze the dataset and the results are used to train and test the data set to check the accuracy of our predictions. Data splitting, data cleaning, data scaling, data summarization, and visualization are used in this report to analyze the dataset and predict the video game sales ratings.
+
+##  Read dataset
+```{r}
+
+vgames <- read.csv("https://raw.githubusercontent.com/rahasyac/Data_Science_Capstone_Project/main/Data%20Science%20Capstone%20Project/Data/Video_Games_Sales_as_at_22_Dec_2016.csv") # read dataset
+
+```
+
+## Data Cleaning
+
+The first step performed after reading the dataset is data cleaning. We go through the process of dropping the irrelevant columns such as “Name", "Year of Release", "Developer", and "Publisher". Then we remove the not applicable data from the dataset to maintain a clean working directory. 
+
+```{r}
+library(tidyr)
+library(dplyr)
+dropcolumns <- c("Name","Year_of_Release","Developer","Publisher")# drop columns
+vgamesdf<- vgames[,!(names(vgames) %in% dropcolumns)]
+vgamesdf <- vgamesdf %>% mutate_all(na_if,"")
+
+head(vgamesdf)# print data
+
+# drop NA values/rows
+vgamesdf <- vgamesdf %>% drop_na()
+```
+
+## Data Summarization
+
+The next task performed on the dataset is data summarization to analyze the data. It helps us understand the summary of generated data in an easy and informative manner.  
+
+```{r}
+
+# data summary
+summary(vgamesdf)
+```
+
+## Data Visualization
+
+We apply data visualization in the form of a scatter plot by plotting the relationship between “Critic Score” and “User Score” for each video game platform. 
+
+```{r  warning=FALSE, message=FALSE}
+library(ggplot2)
+plots <-ggplot(data = vgamesdf,aes(x = Critic_Score,y=User_Score,color = Platform))
+plots + geom_point() + geom_smooth(fill = NA) + ggtitle("Critic vs User Score")+ 
+  xlab("Critic Score")+
+  ylab("User Score")+
+  theme(axis.title.x = element_text(color="red",size = 35),
+        axis.title.y = element_text(color="purple",size = 35),
+        legend.title = element_text(color="purple",size = 15))
+```
+
+```{r}
+
+vgamesdf %>% count(Rating)# count observation for each Rating category
+# the results shown that 
+#Rating    n
+#1     AO    1
+#2      E 2118
+#3   E10+  946
+#4    K-A    1
+#5      M 1459
+#6     RP    2
+#7      T 2420
+# therefore, AO, K-A and RP instances are removed because the machine learning model will be bias as there are not enough observations
+vgamesdf <- filter(vgamesdf, Rating != "AO")
+vgamesdf <- filter(vgamesdf, Rating != "K-A")
+vgamesdf <- filter(vgamesdf, Rating != "RP")
+
+# convert variables to factor and numeric
+vgamesdf$Platform <- as.factor(vgamesdf$Platform) 
+vgamesdf$Genre <- as.factor(vgamesdf$Genre)
+vgamesdf$Rating <- as.factor(vgamesdf$Rating)
+vgamesdf$User_Score <- as.numeric(vgamesdf$User_Score)
+vgamesdf$Critic_Score <- as.numeric(vgamesdf$Critic_Score)
+vgamesdf$Critic_Count <- as.numeric(vgamesdf$Critic_Count)
+vgamesdf$User_Count <- as.numeric(vgamesdf$User_Count)
+
+
+```
+
+```{r}
+
+str(vgamesdf)
+# convert string variables to numeric representation
+df <- vgamesdf %>% mutate_if(is.factor, as.numeric)
+df <- df[sample(nrow(df)),]# randomly shuffle dataset
+```
+
+## Data Splitting
+
+I have utilized data splitting to split the dataset into train and test sets. So that I can use the train set to develop a predictive model and then use the test set to test the model’s performance. 
+
+```{r}
+
+# split dataset
+#install.packages('caTools')
+library(caTools)
+
+set.seed(12345)
+split = sample.split(df$Rating, SplitRatio = 0.70)
+
+training_set = subset(df, split == TRUE)
+test_set = subset(df, split == FALSE)
+
+```
+
+## Data Scaling
+
+The final data science technique I have performed is data scaling. We need to scale the data before performing the algorithms to transform the data and avoid attributes in the greater numeric ranges as they might cause numerical errors. We need to apply the same method of data scaling to both testing and training sets. 
+
+```{r}
+
+# data scaling
+training_set[-12] = scale(training_set[-12])
+test_set[-12] = scale(test_set[-12])
+
+```
+
+## Multiple Regression Model
+
+The first model I am utilizing is multiple linear regression as it will help us to show and predict the relationship between ratings and the other variables in the dataset. 
+```{r}
+
+# plot the distribution of the variable 'Rating'
+ggplot(training_set, aes(Rating)) + geom_density(fill="blue")
+
+```
+```{r}
+
+# Take all the inputs to make a multiple regression model 
+model1 = lm(Rating~., data=training_set)
+
+#data summary
+summary(model1)
+
+```
+```{r}
+
+# plot the model
+par(mfrow=c(2,2))
+plot(model1)
+
+```
+
+## Prediction of Multiple Regression model
+```{r}
+
+# prediction based on model 1
+pred1 <- predict(model1, newdata = test_set)
+
+# calculate RSME and R^^2 
+rmse <- sqrt(sum((exp(pred1) - test_set$Rating)^2)/length(test_set$Rating))
+
+# result for Multiple regression model
+result1 <- c(RMSE = rmse, R2=summary(model1)$r.squared)
+result1
+
+```
+
+```{r}
+
+# plot the model
+par(mfrow=c(1,1))
+plot(test_set$Rating, exp(pred1))
+
+```
+
+## Support Vector Machine model
+
+Since this is not a very large dataset and I don’t know a lot of information about the data, the second modeling approach I have chosen is SVM. The SVM algorithm is stable and few changes in data will not show any major changes in the result. Since the SVM model is a classification algorithm, we can use a confusion matrix to easily get the accuracy and performance of the model.  Another reason to choose the SVM model is because we know there is a non-linear relationship between ratings and the other variables after the performance of the multiple regression algorithm. An advantage of SVM is that we can use the kernel to make non-linear algorithms. 
+
+```{r}
+
+#install.packages('e1071')
+library(e1071)
+
+# support vector machine model
+classifier = svm(formula = Rating ~ .,
+                 data = training_set,
+                 type = 'C-classification',
+                 kernel = 'linear')
+
+```
+## Prediction of the Support Vector Machine model
+```{r}
+y_pred = predict(classifier, newdata = test_set[-12])
+
+
+# confusion matrix
+cm = table(test_set[, 12], y_pred)
+cm
+
+library(caret) 
+result2 <- confusionMatrix(cm)
+```
+# Result
+
+In the multiple regression approach, we see that in the model F = 1.18, which is very close to 1. This means that there is a negative relationship between ratings and the other variables in the dataset. We can see from the plot that the relationship is non-linear. An RSME of 13.34 was found for this model. Based on the Multiple R-squared value which is 0.102, we know the model is not such a good fit.  In the SVM model approach, we observe there is improvement in performance of this model. Using a confusion matrix we find the accuracy for the model is 0.4666. The accuracy is low and it is not a good model as both True Positive Rate and True Negative Rate are high.
+
+```{r}
+
+# result for Multiple regression model
+result1
+
+# result for support vector machine
+result2
+
+```
+# Conculsion
+
+The main task of the project is to develop a model to see if we can predict ratings based on the other variables. We can answer the question by observing the performance of the multiple regression model. It shows that the RSME is high for this model. We can conclude that the average predicted value will be off by 13.34 and that the ratings do not have any significant  positive correlation with the other variables. Similarly the performance of the Support Vector Machine model has a low accuracy at 46.66%, so ratings are a poor classifier for the other variables in the dataset. By observing both performances of the model, it tells us that we cannot predict ratings based on the other variables in the dataset.
